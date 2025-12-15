@@ -20,7 +20,7 @@ def readFromMemory(memory_address):
     if memory_address in objects_in_memory:
         return objects_in_memory[memory_address]
     else:
-        return -1
+        raise KeyError(f"Memory address {memory_address} not found") 
     
 # Read value of memory_address (from core POV)
 def read(core_index, memory_address):
@@ -59,6 +59,8 @@ def read(core_index, memory_address):
 
         print("----Post----")
         print("State:", current_state, " Value:", current_value, " Clock:", clock)
+
+    return current_value
 
 
 # returns 1: its good to read from main memory
