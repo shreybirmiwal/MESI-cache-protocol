@@ -9,11 +9,13 @@ clock = 0
 
 # Adds a new value at memory_address to the main memory storage
 def addObjectToMemory(memory_address, value):
+    global clock
     objects_in_memory[memory_address] = value
     clock += 100
     return
 
 def readFromMemory(memory_address):
+    global clock
     clock += 100
     if memory_address in objects_in_memory:
         return objects_in_memory[memory_address]
@@ -22,7 +24,7 @@ def readFromMemory(memory_address):
     
 # Read value of memory_address (from core POV)
 def read(core_index, memory_address):
-
+    global clock
     print("Core: ", core_index, " attempting to get from memory address: ", memory_address)
     current_core_cache = cores[core_index]
 
@@ -36,11 +38,11 @@ def read(core_index, memory_address):
         if action == 1:
             correct_value = readFromMemory(memory_address)
             # add to our cache in shared state
-            cores[core_index].add(memory_address, [correct_value, "S"])
+            cores[core_index][memory_address] =  [correct_value, "S"]
 
         if action == 2:
             correct_value = readFromMemory(memory_address)
-            cores[core_index].add(memory_address, [correct_value, "E"])
+            cores[core_index][memory_address] =  [correct_value, "E"]
     
     current_value = current_core_cache[memory_address][0]
     current_state = current_core_cache[memory_address][1]
@@ -62,6 +64,7 @@ def read(core_index, memory_address):
 # returns 1: its good to read from main memory
 # returns 2: read from main memory, your the only one with it
 def bus_read(from_core_index, memory_address):
+    global clock
     # we need to bus through everything, see if anyone has the value
     for i in range (0, len(cores)):
 
@@ -80,14 +83,19 @@ def bus_read(from_core_index, memory_address):
                 # ignore invalid
                 continue
 
-            if state == 'M':
+            elif state == 'M':
                 # this core has modified, we want them to write to main memory so that we can read from it
                 addObjectToMemory(memory_address, value)
                 core[memory_address][1] = "S" #downgrade to shared
                 return 1 # its good to read from main memory
             
-            if state == 'E':
+            elif state == 'E':
                 # downgrade to shared
+                core[memory_address][1] = 'S'
+                return 1
+
+            elif state == 'S':
+                return 1 # its good to read from main memory
 
     # we couldn't find anyone in this snoop, just get from main memory, you're in exclusive state 
     return 2
