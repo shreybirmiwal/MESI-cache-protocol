@@ -47,7 +47,7 @@ self.clock = 0
 
 ---
 
-## Reading
+## Reading Data
 
 ### 1. Cache Check
 A core reading a memory address
