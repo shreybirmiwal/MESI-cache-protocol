@@ -10,6 +10,8 @@ class cpu_simulator:
         ]
         self.clock = 0
 
+    def add_new_core(self):
+        self.cores.append({})
 
     def addObjectToMemory(self, memory_address, value):
         self.objects_in_memory[memory_address] = value
@@ -113,20 +115,39 @@ class cpu_simulator:
         return correct_value
 
 
-    # def write(self, core_index, memory_address):
-        # S
-        # --> Move into E first, kick out everyone by telling everyone you're changing it, they should move into I
+    def write(self, core_index, memory_address, new_data):
 
-        #E
-        # --> already exlcusive, just update, then silently move into Modified
+        if memory_address in self.cores[core_index]:
 
-        #M
-        # --> already mofied, jsut modify it further
+            state = self.cores[core_index][memory_address][1]
+            value = self.cores[core_index][memory_address][0]
 
-        # I
-        # Not in cache at all
-        # ? 
+            if (value == new_data):
+                # no need to do any work here
+                return
 
-x = cpu_simulator()
-print(x.read(1, "0x108"))
-print(x.read(1, "0x100"))
+            if state == "S" or state == "I":
+                # kick everyone out of their state, update with our value and put us into modified state
+                self.kick_all_cores(memory_address)
+                state = "E"
+
+            # E
+            # --> already exlcusive, just update, then silently move into Modified
+            if state == "E":
+                # just move into modified state
+                self.cores[core_index][memory_address][1] = "M"
+                state = "M"
+
+            # M
+            # --> already mofied, jsut modify it further
+            if state == "M":
+                self.clock += 1
+                self.cores[core_index][memory_address][0] = new_data
+
+
+            # Not in cache at all -- what to do here
+
+    def kick_all_cores(self):
+        
+
+
