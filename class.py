@@ -22,6 +22,11 @@ class cpu_simulator:
             return self.objects_in_memory[memory_address]
         else:
             raise KeyError(f"Memory address {memory_address} not found") 
+        
+    def share_cache(self, memory_address, cache_value, share_to_core_index):
+        print("Sharing cache to core: ", share_to_core_index)
+        self.clock += 5
+        self.cores[share_to_core_index][memory_address] = [cache_value, "S"]
 
     # Read value of memory_address (from core POV)
     def read(self, core_index, memory_address):
@@ -34,16 +39,8 @@ class cpu_simulator:
         # essnetially called a cache
         if memory_address not in current_core_cache or current_core_cache[memory_address][1] == "I":
             print("Memory address: ", memory_address, " not found in cache or is invalid, sending bus to snoop")
-            action = self.bus_read(core_index, memory_address)
-
-            if action == 1:
-                correct_value = self.readFromMemory(memory_address)
-                # add to our cache in shared state
-                self.cores[core_index][memory_address] =  [correct_value, "S"]
-
-            if action == 2:
-                correct_value = self.readFromMemory(memory_address)
-                self.cores[core_index][memory_address] =  [correct_value, "E"]
+            correct_val = self.bus_read(core_index, memory_address)
+            return correct_val
         
         current_value = current_core_cache[memory_address][0]
         current_state = current_core_cache[memory_address][1]
@@ -92,18 +89,28 @@ class cpu_simulator:
                     # this core has modified, we want them to write to main memory so that we can read from it
                     self.addObjectToMemory(memory_address, value)
                     core[memory_address][1] = "S" #downgrade to shared
-                    return 1 # its good to read from main memory
+                    print("Sharing cache from core: ", i)
+                    self.share_cache(memory_address, value ,from_core_index)
+                    return value
                 
                 elif state == 'E':
                     # downgrade to shared
                     core[memory_address][1] = 'S'
-                    return 1
+                    print("Sharing cache from core: ", i)
+                    self.share_cache(memory_address, value ,from_core_index)
+                    return value
 
                 elif state == 'S':
-                    return 1 # its good to read from main memory
+                    # we are alr in shared so we can just share to the other guy
+                    print("Sharing cache from core: ", i)
+                    self.share_cache(memory_address, value ,from_core_index)
+                    return value
+
 
         # we couldn't find anyone in this snoop, just get from main memory, you're in exclusive state 
-        return 2
+        correct_value = self.readFromMemory(memory_address)
+        self.cores[from_core_index][memory_address] = [correct_value, "E"] #your in exclusive state only owner
+        return correct_value
 
 
     # def write(self, core_index, memory_address):
