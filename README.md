@@ -59,7 +59,6 @@ We check all other cores to check if any cache has the memory address we need
 
 Iterate through all cores. If we see core with cache that has address we want:
 **State M (Modified)**
-- we get that core to push their data onto main memory
 - we move that core into shared state
 - we PEER TO PEER (Core 2 Core) share the data to ourselve
 - ourselves goes into shared state
