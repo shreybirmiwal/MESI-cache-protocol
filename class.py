@@ -1,5 +1,4 @@
 # to do:
-# fix write
 # create a frontend
 # add cache eviction
 
@@ -14,6 +13,7 @@ class cpu_simulator:
             {"0x108": ["Data C", "E"]}
         ]
         self.clock = 0
+        
 
     def add_new_core(self):
         self.cores.append({})
@@ -21,10 +21,12 @@ class cpu_simulator:
     def addObjectToMemory(self, memory_address, value):
         self.objects_in_memory[memory_address] = value
         self.clock += 100
+        print("CLOCK + 100: Adding object to memory")
         return
 
     def readFromMemory(self, memory_address):
         self.clock += 100
+        print("CLOCK + 100: Reading from memory")
         if memory_address in self.objects_in_memory:
             return self.objects_in_memory[memory_address]
         else:
@@ -33,6 +35,7 @@ class cpu_simulator:
     def share_cache(self, memory_address, cache_value, share_to_core_index):
         print("Sharing cache to core: ", share_to_core_index)
         self.clock += 5
+        print("CLOCK + 5: sharing cache between cores")
         self.cores[share_to_core_index][memory_address] = [cache_value, "S"]
 
     # Read value of memory_address (from core POV)
@@ -63,6 +66,7 @@ class cpu_simulator:
             print("State:", current_state, " Value:", current_value, " Clock:", self.clock)
 
             self.clock += 1
+            print("CLOCK + 1: Reading from cache")
 
             print("----Post----")
             print("State:", current_state, " Value:", current_value, " Clock:", self.clock)
@@ -78,6 +82,7 @@ class cpu_simulator:
         for i in range (0, len(self.cores)):
 
             self.clock += 1
+            print("CLOCK + 1: Snooping")
             if i == from_core_index:
                 # ignore our own core
                 continue
@@ -146,6 +151,7 @@ class cpu_simulator:
         # --> already mofied, jsut modify it further
         if state == "M":
             self.clock += 1
+            print("CLOCK + 1: Modifying line")
             self.cores[core_index][memory_address][0] = new_data
 
 
@@ -158,5 +164,6 @@ class cpu_simulator:
 
             core = self.cores[i]
             self.clock += 1
+            print("CLOCK + 1: Pushing core to invalid")
             if memory_address in core:
                 core[memory_address][1] = 'I'
