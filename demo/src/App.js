@@ -351,7 +351,20 @@ const MESISimulator = () => {
           <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: '600', color: '#fff' }}>
             MESI Protocol Simulator
           </h1>
-          <div style={{ color: '#888', marginTop: '5px' }}>Cache Coherence Visualization</div>
+          <a
+            href="https://github.com/shreybirmiwal/MESI-cache-protocol"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: '#4ade80',
+              textDecoration: 'none',
+              fontSize: '0.9rem',
+              marginTop: '5px',
+              display: 'inline-block'
+            }}
+          >
+            View on GitHub →
+          </a>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: '2.5rem', lineHeight: '1', fontWeight: '700', fontFamily: 'monospace' }}>{clock}</div>
