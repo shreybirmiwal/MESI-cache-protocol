@@ -3,6 +3,8 @@
 Simulates how the MESI (modified, exlcusive, shared, invalid) protocol works for multi-core systems.
 Demonstrates how cache cohercy works.
 
+Note: I wrote the backend scripts, simulation: `class.py`. I then had LLMs create a frontend to visualize / play with this simulator in react js, found in demo.js
+
 ---
 
 
@@ -92,4 +94,14 @@ If the memory address is in our cache, with state M, E, S we grab the data and r
 
 ## Writing Data
 
-### 1. 
+### State 1: Current memory address not in cache at all:
+ - We are basically same state as invalid
+ - Create a new cache line for us
+ - Set the state as invalid, move onto invalid state, state 2
+
+ ### State 2: S / I state
+- Invalid or shared: in order to update the data we will need to kick out all other cores of their permissions
+- Move onto state E, state 3
+
+### State 3: E
+- 
