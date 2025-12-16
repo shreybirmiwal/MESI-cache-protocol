@@ -5,6 +5,11 @@ Demonstrates how cache cohercy works.
 
 Note: I wrote the backend scripts, simulation: `class.py`. I then had LLMs create a frontend to visualize / play with this simulator in react js, found in demo.js
 
+Demo video:
+
+
+Website: https://mesi-cache-protocol.vercel.app
+
 ---
 
 
@@ -104,4 +109,7 @@ If the memory address is in our cache, with state M, E, S we grab the data and r
 - Move onto state E, state 3
 
 ### State 3: E
-- 
+- we are aleady have exlcusive rihgts, so we can just update it and silently move into modified
+
+### state 4: M
+- we are already dirty and exlcusive, just make it dirtier by editing it
