@@ -1,3 +1,8 @@
+# to do:
+# fix write
+# create a frontend
+# add cache eviction
+
 class cpu_simulator:
 
     def __init__(self):
@@ -117,37 +122,41 @@ class cpu_simulator:
 
     def write(self, core_index, memory_address, new_data):
 
-        if memory_address in self.cores[core_index]:
+        state = ""
 
+        if memory_address not in self.cores[core_index]:
+            state = "I"
+            self.cores[core_index][memory_address] = ["creating cache line...", "creating cache line..."]
+        else:
             state = self.cores[core_index][memory_address][1]
-            value = self.cores[core_index][memory_address][0]
 
-            if (value == new_data):
-                # no need to do any work here
-                return
+        if state == "S" or state == "I":
+            # kick everyone out of their state, update with our value and put us into modified state
+            self.kick_all_cores(memory_address, core_index)
+            state = "E"
 
-            if state == "S" or state == "I":
-                # kick everyone out of their state, update with our value and put us into modified state
-                self.kick_all_cores(memory_address)
-                state = "E"
+        # E
+        # --> already exlcusive, just update, then silently move into Modified
+        if state == "E":
+            # just move into modified state
+            self.cores[core_index][memory_address][1] = "M"
+            state = "M"
 
-            # E
-            # --> already exlcusive, just update, then silently move into Modified
-            if state == "E":
-                # just move into modified state
-                self.cores[core_index][memory_address][1] = "M"
-                state = "M"
-
-            # M
-            # --> already mofied, jsut modify it further
-            if state == "M":
-                self.clock += 1
-                self.cores[core_index][memory_address][0] = new_data
+        # M
+        # --> already mofied, jsut modify it further
+        if state == "M":
+            self.clock += 1
+            self.cores[core_index][memory_address][0] = new_data
 
 
-            # Not in cache at all -- what to do here
+    def kick_all_cores(self, memory_address, current_core_index):
 
-    def kick_all_cores(self):
-        
+        for i in range (0, len(self.cores)):
 
+            if i == current_core_index:
+                continue
 
+            core = self.cores[i]
+            self.clock += 1
+            if memory_address in core:
+                core[memory_address][1] = 'I'
