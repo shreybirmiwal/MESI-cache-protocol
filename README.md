@@ -7,6 +7,8 @@ Note: I wrote the backend scripts, simulation: `class.py`. I then had LLMs creat
 
 Demo video:
 
+https://github.com/user-attachments/assets/53f227c7-e369-4bae-964d-cdbaa8a7757f
+
 
 Website: https://mesi-cache-protocol.vercel.app
 
