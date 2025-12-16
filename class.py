@@ -97,13 +97,22 @@ class cpu_simulator:
                     # ignore invalid
                     continue
 
-                elif state == 'M' or 'E':
-                    # this core has modified, we want them to share it
+                elif state == 'M':
+                    # this core has modified, we want them to write to main memory so that we can read from it
+                    # we need in main memroy BECAUSE: we are going to shared, which implies that we are equal to main memory, which is not true if we are in this mode
+                    self.addObjectToMemory(memory_address, value)
                     core[memory_address][1] = "S" #downgrade to shared
                     print("Sharing cache from core: ", i)
                     self.share_cache(memory_address, value ,from_core_index)
                     return value
                 
+                elif state == 'E':
+                    # downgrade to shared
+                    core[memory_address][1] = 'S'
+                    print("Sharing cache from core: ", i)
+                    self.share_cache(memory_address, value ,from_core_index)
+                    return value
+
                 elif state == 'S':
                     # we are alr in shared so we can just share to the other guy
                     print("Sharing cache from core: ", i)

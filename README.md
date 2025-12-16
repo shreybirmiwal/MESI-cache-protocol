@@ -63,6 +63,8 @@ Iterate through all cores. If we see core with cache that has address we want:
 - we PEER TO PEER (Core 2 Core) share the data to ourselve
 - ourselves goes into shared state
 
+MODIFIED state is differnet from EXCLUSIVE in the sense that we are going toward shared, which implies equivalance with main memory. So we can't just combine M/E states
+
 **State E (Exclusive)**
 - we just push the other core  into shared 
 - we peer to peer take their data 
@@ -87,3 +89,7 @@ Iterate through all cores. If we see core with cache that has address we want:
 If the memory address is in our cache, with state M, E, S we grab the data and return it. This is because M, E, S states indicate that the cache data is the most up to date
 
 
+
+## Writing Data
+
+### 1. 

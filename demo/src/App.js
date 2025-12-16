@@ -1,28 +1,40 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const App = () => {
   const [clock, setClock] = useState(0);
   const [activeTransfers, setActiveTransfers] = useState([]);
   const [highlightedNodes, setHighlightedNodes] = useState({});
+  const [logHistory, setLogHistory] = useState([]);
 
+  // 1. MEMORY STATE
   const [objectsInMemory, setObjectsInMemory] = useState({
     "0x100": "Data A",
     "0x104": "Data B",
     "0x108": "Data C"
   });
 
+  // 2. CORE STATE (Started with 4 Cores)
   const [cores, setCores] = useState([
-    { "0x100": ["Data F", "M"], "0x104": ["Data G", "I"] },
-    { "0x108": ["Data C", "E"] }
+    { "0x100": ["Data F", "M"], "0x104": ["Data G", "I"] }, // Core 0
+    { "0x108": ["Data C", "E"] },                            // Core 1
+    {},                                                      // Core 2
+    {}                                                       // Core 3
   ]);
 
+  // 3. UI STATE
   const [opCore, setOpCore] = useState(0);
   const [opAddr, setOpAddr] = useState("0x100");
   const [opVal, setOpVal] = useState("NewData");
-  const [currentLog, setCurrentLog] = useState("System ready");
 
-  // Animation helpers
-  const animateTransfer = (from, to, data, color = '#61dafb') => {
+  // --- ANIMATION SYSTEM ---
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const log = (msg) => {
+    const timestamp = new Date().toLocaleTimeString([], { hour12: false });
+    setLogHistory(prev => [`[${timestamp}] ${msg}`, ...prev].slice(0, 5));
+  };
+
+  const animateTransfer = (from, to, data, color = '#ffffff') => {
     const id = Date.now() + Math.random();
     setActiveTransfers(prev => [...prev, { id, from, to, data, color, progress: 0 }]);
 
@@ -31,64 +43,65 @@ const App = () => {
         const updated = prev.map(t =>
           t.id === id ? { ...t, progress: t.progress + 0.05 } : t
         );
+        // Remove finished transfers
         return updated.filter(t => t.progress < 1);
       });
-    }, 30);
+    }, 20);
 
-    setTimeout(() => clearInterval(interval), 600);
+    setTimeout(() => clearInterval(interval), 400);
   };
 
-  const highlightNode = (node, duration = 1000) => {
+  const highlightNode = (node) => {
     setHighlightedNodes(prev => ({ ...prev, [node]: true }));
     setTimeout(() => {
       setHighlightedNodes(prev => ({ ...prev, [node]: false }));
-    }, duration);
+    }, 500);
   };
 
-  const log = (msg) => {
-    setCurrentLog(msg);
-  };
-
-  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-  // Core positions for visualization
+  // --- POSITIONING LOGIC ---
   const getNodePosition = (type, index = 0) => {
-    if (type === 'memory') return { x: 400, y: 50 };
-    if (type === 'bus') return { x: 400, y: 250 };
+    const CX = 400; // Center X
+    const CY = 300; // Center Y
+    const R = 220;  // Radius
 
-    // Arrange cores in a circle around the bus
-    const numCores = cores.length;
-    const radius = 200;
-    const angle = (index / numCores) * 2 * Math.PI - Math.PI / 2;
-    return {
-      x: 400 + radius * Math.cos(angle),
-      y: 250 + radius * Math.sin(angle)
-    };
+    if (type === 'memory') return { x: CX, y: 550 };
+    if (type === 'bus') return { x: CX, y: CY };
+
+    // 4 Cores in a square layout
+    // 0: Top Left, 1: Top Right, 2: Bottom Right, 3: Bottom Left
+    const positions = [
+      { x: CX - 180, y: CY - 180 },
+      { x: CX + 180, y: CY - 180 },
+      { x: CX + 180, y: CY + 100 },
+      { x: CX - 180, y: CY + 100 },
+    ];
+    return positions[index] || { x: CX, y: CY };
   };
 
-  // MESI Operations
+  // --- MESI LOGIC ---
+
   const addObjectToMemory = async (memory_address, value) => {
     setObjectsInMemory(prev => ({ ...prev, [memory_address]: value }));
     setClock(prev => prev + 100);
-    highlightNode('memory', 1500);
-    log(`Added ${value} to memory at ${memory_address}`);
+    highlightNode('memory');
+    log(`RAM: Written ${value} @ ${memory_address}`);
     await delay(300);
   };
 
   const readFromMemory = async (memory_address) => {
     setClock(prev => prev + 100);
-    highlightNode('memory', 1000);
-    log(`Reading from memory: ${memory_address}`);
+    highlightNode('memory');
+    log(`RAM: Read ${memory_address}`);
     await delay(300);
-    return objectsInMemory[memory_address] || "ERROR";
+    return objectsInMemory[memory_address] || "ERR";
   };
 
   const shareCache = async (memory_address, cache_value, fromCore, toCore) => {
-    log(`Core ${fromCore} sharing to Core ${toCore}`);
-    animateTransfer(`core${fromCore}`, `core${toCore}`, cache_value, '#4ade80');
-    await delay(600);
-    setClock(prev => prev + 5);
+    log(`BUS: Core ${fromCore} -> Core ${toCore}`);
+    animateTransfer(`core${fromCore}`, `core${toCore}`, cache_value);
+    await delay(400);
 
+    setClock(prev => prev + 5);
     setCores(prev => {
       const newCores = [...prev];
       newCores[toCore] = {
@@ -100,67 +113,64 @@ const App = () => {
   };
 
   const busRead = async (from_core_index, memory_address) => {
-    log(`Core ${from_core_index} broadcasting on bus for ${memory_address}`);
-    highlightNode('bus', 2000);
+    log(`BUS: Read Request for ${memory_address}`);
+    highlightNode('bus');
 
-    // Animate broadcast to all cores
+    // Visual: Broadcast
     for (let i = 0; i < cores.length; i++) {
-      if (i !== from_core_index) {
-        animateTransfer('bus', `core${i}`, 'snoop', '#fbbf24');
-      }
+      if (i !== from_core_index) animateTransfer('bus', `core${i}`, '?', '#555');
     }
     await delay(300);
 
     let tempCores = JSON.parse(JSON.stringify(cores));
+    let providerFound = false;
+    let val = null;
 
     for (let i = 0; i < tempCores.length; i++) {
-      setClock(prev => prev + 1);
-
       if (i === from_core_index) continue;
 
       const core = tempCores[i];
       if (core[memory_address]) {
         const [value, state] = core[memory_address];
-
         if (state === 'I') continue;
 
         if (state === 'M') {
-          log(`Core ${i} has modified data - writing back to memory`);
-          highlightNode(`core${i}`, 1000);
-          animateTransfer(`core${i}`, 'memory', value, '#ef4444');
-          await delay(600);
+          log(`BUS: Core ${i} Flush (M->S)`);
+          highlightNode(`core${i}`);
+          animateTransfer(`core${i}`, 'memory', value, '#fff'); // Flush
+          await delay(400);
           await addObjectToMemory(memory_address, value);
 
           tempCores[i][memory_address][1] = "S";
           await shareCache(memory_address, value, i, from_core_index);
-          setCores(tempCores);
-          return value;
+          providerFound = true;
+          val = value;
+          break;
         }
         else if (state === 'E' || state === 'S') {
-          log(`Core ${i} sharing (${state} state)`);
-          highlightNode(`core${i}`, 1000);
+          log(`BUS: Core ${i} Shared`);
           if (state === 'E') tempCores[i][memory_address][1] = "S";
           await shareCache(memory_address, value, i, from_core_index);
-          setCores(tempCores);
-          return value;
+          providerFound = true;
+          val = value;
+          break;
         }
       }
     }
 
     setCores(tempCores);
 
-    // Not found in caches - fetch from memory
-    log(`Cache miss - fetching from memory`);
-    animateTransfer('memory', `core${from_core_index}`, memory_address, '#61dafb');
-    await delay(600);
+    if (providerFound) return val;
+
+    // Cache Miss -> RAM
+    log(`BUS: Miss. Fetching RAM.`);
+    animateTransfer('memory', `core${from_core_index}`, memory_address);
+    await delay(400);
     const correct_value = await readFromMemory(memory_address);
 
     setCores(prev => {
       const c = [...prev];
-      c[from_core_index] = {
-        ...c[from_core_index],
-        [memory_address]: [correct_value, "E"]
-      };
+      c[from_core_index] = { ...c[from_core_index], [memory_address]: [correct_value, "E"] };
       return c;
     });
 
@@ -168,338 +178,236 @@ const App = () => {
   };
 
   const kickAllCores = async (memory_address, current_core_index) => {
-    log(`Broadcasting invalidation for ${memory_address}`);
-    highlightNode('bus', 1500);
+    log(`BUS: Invalidate ${memory_address}`);
+    highlightNode('bus');
 
     for (let i = 0; i < cores.length; i++) {
-      if (i !== current_core_index && cores[i][memory_address]) {
-        animateTransfer('bus', `core${i}`, 'invalidate', '#ef4444');
-        highlightNode(`core${i}`, 800);
+      if (i !== current_core_index) {
+        animateTransfer('bus', `core${i}`, 'X', '#fff'); // Invalidate signal
       }
     }
-    await delay(600);
+    await delay(300);
 
-    setCores(prev => {
-      const newCores = prev.map((core, i) => {
-        if (i === current_core_index) return core;
-        if (core[memory_address]) {
-          const newCore = { ...core };
-          newCore[memory_address] = [newCore[memory_address][0], 'I'];
-          return newCore;
-        }
-        return core;
-      });
-      return newCores;
-    });
+    setCores(prev => prev.map((core, i) => {
+      if (i === current_core_index) return core;
+      if (core[memory_address]) {
+        return { ...core, [memory_address]: [core[memory_address][0], 'I'] };
+      }
+      return core;
+    }));
     setClock(prev => prev + 1);
   };
 
+  // --- ACTIONS ---
+
   const handleRead = async () => {
-    log(`READ operation: Core ${opCore}, Address ${opAddr}`);
-    highlightNode(`core${opCore}`, 2000);
-    const current_core_cache = cores[opCore];
+    log(`OP: Core ${opCore} READ ${opAddr}`);
+    highlightNode(`core${opCore}`);
+    const cache = cores[opCore];
 
-    if (!current_core_cache[opAddr] || current_core_cache[opAddr][1] === "I") {
-      log("Cache miss or invalid - initiating bus read");
+    if (!cache[opAddr] || cache[opAddr][1] === "I") {
       await busRead(opCore, opAddr);
-      return;
-    }
-
-    const [current_value, current_state] = current_core_cache[opAddr];
-    if (["M", "E", "S"].includes(current_state)) {
-      log(`Cache hit! State: ${current_state}, Value: ${current_value}`);
+    } else {
+      log(`HIT: ${cache[opAddr][1]}`);
       setClock(prev => prev + 1);
     }
   };
 
   const handleWrite = async () => {
-    log(`WRITE operation: Core ${opCore}, Address ${opAddr} = ${opVal}`);
-    highlightNode(`core${opCore}`, 2000);
+    log(`OP: Core ${opCore} WRITE ${opAddr}`);
+    highlightNode(`core${opCore}`);
 
     let state = cores[opCore][opAddr] ? cores[opCore][opAddr][1] : "I";
 
     if (state === "S" || state === "I") {
-      log(`State ${state} - invalidating other caches`);
       await kickAllCores(opAddr, opCore);
       state = "E";
     }
 
     setCores(prev => {
       const newCores = [...prev];
-      if (state === "E" || state === "M") {
-        newCores[opCore][opAddr] = [opVal, "M"];
-      }
+      newCores[opCore] = { ...newCores[opCore], [opAddr]: [opVal, "M"] };
       return newCores;
     });
 
     setClock(prev => prev + 1);
-    log(`Write complete - Core ${opCore} now in M state`);
   };
 
-  // Render animated transfer lines
-  const renderTransfers = () => {
-    return activeTransfers.map(transfer => {
-      const fromPos = getNodePosition(...transfer.from.split(/(\d+)/));
-      const toPos = getNodePosition(...transfer.to.split(/(\d+)/));
+  // --- RENDER HELPERS ---
 
-      const x = fromPos.x + (toPos.x - fromPos.x) * transfer.progress;
-      const y = fromPos.y + (toPos.y - fromPos.y) * transfer.progress;
-
-      return (
-        <g key={transfer.id}>
-          <line
-            x1={fromPos.x}
-            y1={fromPos.y}
-            x2={toPos.x}
-            y2={toPos.y}
-            stroke={transfer.color}
-            strokeWidth="2"
-            strokeDasharray="5,5"
-            opacity="0.4"
-          />
-          <circle
-            cx={x}
-            cy={y}
-            r="6"
-            fill={transfer.color}
-            opacity="0.8"
-          />
-          <text
-            x={x}
-            y={y - 12}
-            fill={transfer.color}
-            fontSize="10"
-            textAnchor="middle"
-            fontWeight="bold"
-          >
-            {transfer.data}
-          </text>
-        </g>
-      );
-    });
-  };
-
-  const stateColors = {
-    M: '#ef4444',
-    E: '#22c55e',
-    S: '#3b82f6',
-    I: '#6b7280'
+  // Minimalist terminal colors
+  const stateStyle = (s) => {
+    switch (s) {
+      case 'M': return { color: '#ff3333', fontWeight: 'bold' }; // Red
+      case 'E': return { color: '#33ff33', fontWeight: 'bold' }; // Green
+      case 'S': return { color: '#33ffff', fontWeight: 'bold' }; // Cyan
+      case 'I': return { color: '#666', fontStyle: 'italic' };   // Grey
+      default: return {};
+    }
   };
 
   return (
-    <div style={{ fontFamily: 'system-ui', padding: '20px', background: '#0f172a', minHeight: '100vh', color: 'white' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <div>
-            <h1 style={{ margin: 0, color: '#61dafb' }}>MESI Protocol Visualizer</h1>
-            <p style={{ margin: '5px 0', color: '#94a3b8' }}>Watch cache coherence in action</p>
+    <div style={{
+      fontFamily: 'Menlo, Monaco, Consolas, "Courier New", monospace',
+      background: '#000000',
+      color: '#e0e0e0',
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      padding: '40px'
+    }}>
+
+      {/* HEADER */}
+      <div style={{ borderBottom: '2px solid #333', paddingBottom: '20px', marginBottom: '40px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '2.5rem', letterSpacing: '-1px', color: '#fff' }}>MESI PROTOCOL</h1>
+          <div style={{ color: '#666', marginTop: '5px' }}>Watch cache coherence in action</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '3rem', lineHeight: '1', fontWeight: 'bold' }}>{clock}</div>
+          <div style={{ color: '#444', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Cycles</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '40px' }}>
+
+        {/* LEFT COLUMN: CONTROLS & LOGS */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+
+          {/* CONTROL PANEL */}
+          <div style={{ border: '1px solid #333', padding: '20px' }}>
+            <div style={{ color: '#666', fontSize: '0.8rem', marginBottom: '15px', textTransform: 'uppercase' }}>Operation</div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <select
+                  style={{ background: '#000', color: '#fff', border: '1px solid #333', padding: '10px', flex: 1, fontFamily: 'inherit' }}
+                  value={opCore} onChange={e => setOpCore(Number(e.target.value))}
+                >
+                  {cores.map((_, i) => <option key={i} value={i}>CORE {i}</option>)}
+                </select>
+                <input
+                  style={{ background: '#000', color: '#fff', border: '1px solid #333', padding: '10px', width: '80px', fontFamily: 'inherit' }}
+                  value={opAddr} onChange={e => setOpAddr(e.target.value)}
+                />
+              </div>
+              <input
+                style={{ background: '#000', color: '#fff', border: '1px solid #333', padding: '10px', fontFamily: 'inherit' }}
+                value={opVal} onChange={e => setOpVal(e.target.value)} placeholder="Value..."
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                <button onClick={handleRead} style={{ background: '#fff', color: '#000', border: 'none', padding: '12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 'bold' }}>READ</button>
+                <button onClick={handleWrite} style={{ background: 'transparent', color: '#fff', border: '1px solid #fff', padding: '12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 'bold' }}>WRITE</button>
+              </div>
+            </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#61dafb' }}>{clock}</div>
-            <div style={{ fontSize: '0.9em', color: '#94a3b8' }}>Clock Cycles</div>
+
+          {/* LOGS */}
+          <div style={{ border: '1px solid #333', padding: '20px', flex: 1, minHeight: '300px' }}>
+            <div style={{ color: '#666', fontSize: '0.8rem', marginBottom: '15px', textTransform: 'uppercase' }}>System Log</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem' }}>
+              {logHistory.map((l, i) => (
+                <div key={i} style={{ borderLeft: i === 0 ? '2px solid #fff' : '2px solid transparent', paddingLeft: '10px', color: i === 0 ? '#fff' : '#666' }}>
+                  {l}
+                </div>
+              ))}
+              {logHistory.length === 0 && <span style={{ color: '#333' }}>Waiting for input...</span>}
+            </div>
           </div>
+
         </div>
 
-        {/* Controls */}
-        <div style={{ background: '#1e293b', padding: '20px', borderRadius: '12px', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'end', marginBottom: '15px' }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9em' }}>Core</label>
-              <select
-                value={opCore}
-                onChange={e => setOpCore(Number(e.target.value))}
-                style={{ width: '100%', padding: '8px', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', color: 'white' }}
-              >
-                {cores.map((_, i) => <option key={i} value={i}>Core {i}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9em' }}>Address</label>
-              <input
-                value={opAddr}
-                onChange={e => setOpAddr(e.target.value)}
-                style={{ width: '100%', padding: '8px', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', color: 'white' }}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: '5px', color: '#94a3b8', fontSize: '0.9em' }}>Value (Write)</label>
-              <input
-                value={opVal}
-                onChange={e => setOpVal(e.target.value)}
-                style={{ width: '100%', padding: '8px', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', color: 'white' }}
-              />
-            </div>
-            <button onClick={handleRead} style={{ padding: '8px 24px', background: '#3b82f6', border: 'none', borderRadius: '6px', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
-              READ
-            </button>
-            <button onClick={handleWrite} style={{ padding: '8px 24px', background: '#ef4444', border: 'none', borderRadius: '6px', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
-              WRITE
-            </button>
-          </div>
+        {/* RIGHT COLUMN: VISUALIZATION */}
+        <div style={{ position: 'relative', border: '1px solid #333', minHeight: '600px', background: '#050505' }}>
+          <svg width="100%" height="100%" viewBox="0 0 800 600">
+            <defs>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="20" refY="3" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L0,6 L9,3 z" fill="#333" />
+              </marker>
+            </defs>
 
-          <div style={{ padding: '12px', background: '#0f172a', borderRadius: '6px', borderLeft: '3px solid #61dafb' }}>
-            <div style={{ fontSize: '0.85em', color: '#94a3b8' }}>System Status:</div>
-            <div style={{ fontSize: '0.95em', marginTop: '4px' }}>{currentLog}</div>
-          </div>
-        </div>
-
-        {/* Visual Graph */}
-        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
-          <svg width="800" height="500" style={{ display: 'block', margin: '0 auto' }}>
-            {/* Connection lines */}
-            <g opacity="0.3">
+            {/* CONNECTING LINES */}
+            <g stroke="#222" strokeWidth="2">
               {cores.map((_, i) => {
-                const corePos = getNodePosition('core', i);
-                const busPos = getNodePosition('bus');
-                return (
-                  <line
-                    key={`bus-line-${i}`}
-                    x1={corePos.x}
-                    y1={corePos.y}
-                    x2={busPos.x}
-                    y2={busPos.y}
-                    stroke="#475569"
-                    strokeWidth="2"
-                  />
-                );
+                const p = getNodePosition('core', i);
+                const bus = getNodePosition('bus');
+                return <line key={i} x1={p.x} y1={p.y} x2={bus.x} y2={bus.y} />;
               })}
               <line
-                x1={getNodePosition('memory').x}
-                y1={getNodePosition('memory').y}
-                x2={getNodePosition('bus').x}
-                y2={getNodePosition('bus').y}
-                stroke="#475569"
-                strokeWidth="2"
+                x1={getNodePosition('memory').x} y1={getNodePosition('memory').y}
+                x2={getNodePosition('bus').x} y2={getNodePosition('bus').y}
               />
             </g>
 
-            {/* Animated transfers */}
-            {renderTransfers()}
-
-            {/* Memory */}
-            <g>
-              <rect
-                x={getNodePosition('memory').x - 60}
-                y={getNodePosition('memory').y - 25}
-                width="120"
-                height="50"
-                rx="8"
-                fill={highlightedNodes['memory'] ? '#1e40af' : '#1e293b'}
-                stroke="#61dafb"
-                strokeWidth="3"
-              />
-              <text x={getNodePosition('memory').x} y={getNodePosition('memory').y + 5} textAnchor="middle" fill="white" fontWeight="bold">
-                MEMORY
-              </text>
-            </g>
-
-            {/* Bus */}
-            <g>
-              <rect
-                x={getNodePosition('bus').x - 50}
-                y={getNodePosition('bus').y - 20}
-                width="100"
-                height="40"
-                rx="6"
-                fill={highlightedNodes['bus'] ? '#7c3aed' : '#1e293b'}
-                stroke="#a78bfa"
-                strokeWidth="2"
-              />
-              <text x={getNodePosition('bus').x} y={getNodePosition('bus').y + 5} textAnchor="middle" fill="white" fontSize="14" fontWeight="bold">
-                BUS
-              </text>
-            </g>
-
-            {/* Cores */}
-            {cores.map((cache, i) => {
-              const pos = getNodePosition('core', i);
-              const cacheLines = Object.entries(cache);
-
+            {/* ANIMATED PACKETS */}
+            {activeTransfers.map(t => {
+              const start = getNodePosition(...t.from.split(/(\d+)/));
+              const end = getNodePosition(...t.to.split(/(\d+)/));
+              const x = start.x + (end.x - start.x) * t.progress;
+              const y = start.y + (end.y - start.y) * t.progress;
               return (
-                <g key={i}>
-                  <circle
-                    cx={pos.x}
-                    cy={pos.y}
-                    r="50"
-                    fill={highlightedNodes[`core${i}`] ? '#1e40af' : '#1e293b'}
-                    stroke="#3b82f6"
-                    strokeWidth="3"
-                  />
-                  <text x={pos.x} y={pos.y - 20} textAnchor="middle" fill="white" fontWeight="bold" fontSize="14">
-                    Core {i}
-                  </text>
-
-                  {cacheLines.slice(0, 2).map(([addr, [val, state]], idx) => (
-                    <text key={addr} x={pos.x} y={pos.y + idx * 15} textAnchor="middle" fontSize="10" fill={stateColors[state]}>
-                      {addr}: {state}
-                    </text>
-                  ))}
-                  {cacheLines.length > 2 && (
-                    <text x={pos.x} y={pos.y + 30} textAnchor="middle" fontSize="9" fill="#94a3b8">
-                      +{cacheLines.length - 2} more
-                    </text>
-                  )}
+                <g key={t.id}>
+                  <circle cx={x} cy={y} r="4" fill="#fff" />
+                  <text x={x + 8} y={y} fill="#fff" fontSize="10" fontFamily="inherit">{t.data}</text>
                 </g>
               );
             })}
+
+            {/* MEMORY NODE */}
+            <g transform={`translate(${getNodePosition('memory').x}, ${getNodePosition('memory').y})`}>
+              <rect x="-80" y="-30" width="160" height="60" fill="#000" stroke={highlightedNodes['memory'] ? '#fff' : '#333'} strokeWidth="2" />
+              <text y="-40" textAnchor="middle" fill="#666" fontSize="10" letterSpacing="2px">MAIN MEMORY</text>
+              <g transform="translate(-70, -10)">
+                {Object.entries(objectsInMemory).map(([k, v], i) => (
+                  <text key={k} y={i * 15} fill="#888" fontSize="10" fontFamily="inherit">
+                    {k}: <tspan fill="#fff">{v}</tspan>
+                  </text>
+                ))}
+              </g>
+            </g>
+
+            {/* BUS NODE */}
+            <g transform={`translate(${getNodePosition('bus').x}, ${getNodePosition('bus').y})`}>
+              <circle r="40" fill="#000" stroke={highlightedNodes['bus'] ? '#fff' : '#333'} strokeWidth="2" />
+              <text dy="5" textAnchor="middle" fill="#666" fontSize="12" letterSpacing="1px">BUS</text>
+            </g>
+
+            {/* CORE NODES */}
+            {cores.map((cache, i) => {
+              const pos = getNodePosition('core', i);
+              const isHighlight = highlightedNodes[`core${i}`];
+              return (
+                <g key={i} transform={`translate(${pos.x}, ${pos.y})`}>
+                  {/* Core Box */}
+                  <rect
+                    x="-70" y="-60" width="140" height="120"
+                    fill="#000"
+                    stroke={isHighlight ? '#fff' : '#333'}
+                    strokeWidth={isHighlight ? 2 : 1}
+                  />
+
+                  {/* Label */}
+                  <text y="-75" x="-70" fill="#666" fontSize="10" letterSpacing="1px">CORE {i}</text>
+
+                  {/* Cache Lines */}
+                  <g transform="translate(-60, -35)">
+                    {Object.keys(cache).length === 0 ? <text fill="#333" fontSize="10">EMPTY</text> : null}
+                    {Object.entries(cache).map(([addr, [val, state]], idx) => (
+                      <g key={addr} transform={`translate(0, ${idx * 20})`}>
+                        <text fill="#888" fontSize="10">{addr}</text>
+                        <text x="45" fill="#ccc" fontSize="10">{val}</text>
+                        <text x="110" style={stateStyle(state)} fontSize="10">{state}</text>
+                        <line x1="0" y1="12" x2="120" y2="12" stroke="#111" />
+                      </g>
+                    ))}
+                  </g>
+                </g>
+              );
+            })}
+
           </svg>
         </div>
 
-        {/* State Details */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-          {/* Memory Details */}
-          <div style={{ background: '#1e293b', borderRadius: '12px', padding: '15px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#61dafb' }}>Memory Contents</h3>
-            {Object.entries(objectsInMemory).map(([addr, val]) => (
-              <div key={addr} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: '#0f172a', marginBottom: '5px', borderRadius: '6px' }}>
-                <span style={{ color: '#94a3b8' }}>{addr}</span>
-                <span>{val}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Cache Details */}
-          <div style={{ background: '#1e293b', borderRadius: '12px', padding: '15px' }}>
-            <h3 style={{ margin: '0 0 15px 0', color: '#3b82f6' }}>Cache States</h3>
-            {cores.map((cache, i) => (
-              <div key={i} style={{ marginBottom: '15px' }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#94a3b8' }}>Core {i}</div>
-                {Object.entries(cache).map(([addr, [val, state]]) => (
-                  <div key={addr} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px', background: '#0f172a', marginBottom: '3px', borderRadius: '4px', fontSize: '0.9em' }}>
-                    <span style={{ color: '#94a3b8' }}>{addr}</span>
-                    <span>{val}</span>
-                    <span style={{ padding: '2px 8px', borderRadius: '4px', background: stateColors[state], fontSize: '0.85em', fontWeight: 'bold' }}>
-                      {state}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div style={{ marginTop: '20px', padding: '15px', background: '#1e293b', borderRadius: '12px' }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>MESI States</div>
-          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '20px', height: '20px', background: '#ef4444', borderRadius: '4px' }}></div>
-              <span>Modified (M) - Exclusive & Dirty</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '20px', height: '20px', background: '#22c55e', borderRadius: '4px' }}></div>
-              <span>Exclusive (E) - Exclusive & Clean</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '20px', height: '20px', background: '#3b82f6', borderRadius: '4px' }}></div>
-              <span>Shared (S) - Clean Copy</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '20px', height: '20px', background: '#6b7280', borderRadius: '4px' }}></div>
-              <span>Invalid (I) - Not Valid</span>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
